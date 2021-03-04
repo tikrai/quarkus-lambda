@@ -16,6 +16,7 @@
 package com.amazon.example;
 
 import com.amazon.example.pojo.User;
+import com.amazon.example.service.StringService;
 import com.amazon.example.service.UserService;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -41,8 +42,19 @@ public class ProcessingLambda implements RequestHandler<APIGatewayProxyRequestEv
     @Inject
     UserService userService;
 
+    @Inject
+    StringService stringService;
+
     @Override
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
+    public APIGatewayProxyResponseEvent handleRequest(
+        APIGatewayProxyRequestEvent request, Context context
+    ) {
+
+        try {
+            String requestString = mapper.writeValueAsString(request);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
 
         Map<String, String> query = request.getQueryStringParameters();
 
@@ -57,40 +69,40 @@ public class ProcessingLambda implements RequestHandler<APIGatewayProxyRequestEv
         Map<String, String> pathParameters = request.getPathParameters();
 
         switch (httpMethod) {
-
             case "GET":
-                Map<String, String> queryStringParameters = request.getQueryStringParameters();
-
-                String userId = null;
-
-                if (pathParameters != null)
-                    userId = pathParameters.get("userId");
-                else if (queryStringParameters != null)
-                    userId = queryStringParameters.get("userId");
-
-                if (userId == null || userId.length() == 0) {
-                    LOGGER.info("Getting all users");
-                    userList = userService.findAll();
-                    LOGGER.info("GET: " + userList);
-                    try {
-                        result = mapper.writeValueAsString(userList);
-                    } catch (JsonProcessingException exc) {
-                        LOGGER.error(exc);
-                    }
-                } else {
-                    user = userService.get(userId);
-                    LOGGER.info("GET: " + user);
-
-                    if (user.getUserId() == null)
-                        result = "";
-                    else {
-                        try {
-                            result = mapper.writeValueAsString(user);
-                        } catch (JsonProcessingException exc) {
-                            LOGGER.error(exc);
-                        }
-                    }
-                }
+//                Map<String, String> queryStringParameters = request.getQueryStringParameters();
+//
+//                String userId = null;
+//
+//                if (pathParameters != null)
+//                    userId = pathParameters.get("userId");
+//                else if (queryStringParameters != null)
+//                    userId = queryStringParameters.get("userId");
+//
+//                if (userId == null || userId.length() == 0) {
+//                    LOGGER.info("Getting all users");
+//                    userList = userService.findAll();
+//                    LOGGER.info("GET: " + userList);
+//                    try {
+//                        result = mapper.writeValueAsString(userList);
+//                    } catch (JsonProcessingException exc) {
+//                        LOGGER.error(exc);
+//                    }
+//                } else {
+//                    user = userService.get(userId);
+//                    LOGGER.info("GET: " + user);
+//
+//                    if (user.getUserId() == null)
+//                        result = "";
+//                    else {
+//                        try {
+//                            result = mapper.writeValueAsString(user);
+//                        } catch (JsonProcessingException exc) {
+//                            LOGGER.error(exc);
+//                        }
+//                    }
+//                }
+                result = stringService.respond();
                 break;
             case "POST":
                 String body = request.getBody();
