@@ -15,8 +15,7 @@
  */
 package com.amazon.example;
 
-import com.amazon.example.pojo.User;
-import com.amazon.example.service.StringService;
+import com.amazon.example.domain.User;
 import com.amazon.example.service.UserService;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -35,106 +34,89 @@ import java.util.UUID;
 @Named("processing")
 public class ProcessingLambda implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-    private static final Logger LOGGER = Logger.getLogger(ProcessingLambda.class);
+  private static final Logger LOGGER = Logger.getLogger(ProcessingLambda.class);
 
-    private ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper = new ObjectMapper();
 
-    @Inject
-    UserService userService;
+  @Inject
+  UserService userService;
 
-    @Inject
-    StringService stringService;
+  @Override
+  public APIGatewayProxyResponseEvent handleRequest(
+      APIGatewayProxyRequestEvent request,
+      Context context
+  ) {
+    LOGGER.info(String.format("[%s] Processed data", request));
 
-    @Override
-    public APIGatewayProxyResponseEvent handleRequest(
-        APIGatewayProxyRequestEvent request, Context context
-    ) {
+    User user;
+    String result = "";
+    List<User> userList;
 
+    String httpMethod = request.getHttpMethod();
+
+    Map<String, String> pathParameters = request.getPathParameters();
+
+    switch (httpMethod) {
+      case "GET":
+        Map<String, String> queryStringParameters = request.getQueryStringParameters();
+
+        String userId = null;
+
+        if (pathParameters != null)
+          userId = pathParameters.get("userId");
+        else if (queryStringParameters != null)
+          userId = queryStringParameters.get("userId");
+
+        if (userId == null || userId.length() == 0) {
+          LOGGER.info("Getting all users");
+          userList = userService.findAll();
+          LOGGER.info("GET: " + userList);
+          try {
+            result = mapper.writeValueAsString(userList);
+          } catch (JsonProcessingException exc) {
+            LOGGER.error(exc);
+          }
+        } else {
+          user = userService.get(userId);
+          LOGGER.info("GET: " + user);
+
+          if (user.getUserId() == null)
+            result = "";
+          else {
+            try {
+              result = mapper.writeValueAsString(user);
+            } catch (JsonProcessingException exc) {
+              LOGGER.error(exc);
+            }
+          }
+        }
+        break;
+      case "POST":
+        String body = request.getBody();
         try {
-            String requestString = mapper.writeValueAsString(request);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+          User tmpUser = mapper.readValue(body, User.class)
+              .withUserId(createUserId());
+          LOGGER.info("POST: " + tmpUser);
+          result = userService.add(tmpUser);
         }
-
-        Map<String, String> query = request.getQueryStringParameters();
-
-        LOGGER.info(String.format("[%s] Processed data", request));
-
-        User user;
-        String result = "";
-        List<User> userList;
-
-        String httpMethod = request.getHttpMethod();
-
-        Map<String, String> pathParameters = request.getPathParameters();
-
-        switch (httpMethod) {
-            case "GET":
-//                Map<String, String> queryStringParameters = request.getQueryStringParameters();
-//
-//                String userId = null;
-//
-//                if (pathParameters != null)
-//                    userId = pathParameters.get("userId");
-//                else if (queryStringParameters != null)
-//                    userId = queryStringParameters.get("userId");
-//
-//                if (userId == null || userId.length() == 0) {
-//                    LOGGER.info("Getting all users");
-//                    userList = userService.findAll();
-//                    LOGGER.info("GET: " + userList);
-//                    try {
-//                        result = mapper.writeValueAsString(userList);
-//                    } catch (JsonProcessingException exc) {
-//                        LOGGER.error(exc);
-//                    }
-//                } else {
-//                    user = userService.get(userId);
-//                    LOGGER.info("GET: " + user);
-//
-//                    if (user.getUserId() == null)
-//                        result = "";
-//                    else {
-//                        try {
-//                            result = mapper.writeValueAsString(user);
-//                        } catch (JsonProcessingException exc) {
-//                            LOGGER.error(exc);
-//                        }
-//                    }
-//                }
-                result = stringService.respond();
-                break;
-            case "POST":
-                String body = request.getBody();
-                try {
-                    User tmpUser = mapper.readValue(body, User.class);
-                    tmpUser.setUserId(createUserId());
-
-                    LOGGER.info("POST: " + tmpUser);
-                    String tmpId = userService.add(tmpUser);
-
-                    result = tmpId;
-                }
-                catch (JsonProcessingException exc) {
-                    LOGGER.error(exc);
-                }
-                break;
-            case "DELETE":
-                if (pathParameters != null) {
-                    String id = pathParameters.get("userId");
-                    String tmpId = userService.delete(id);
-
-                    LOGGER.info("DELETE: " + tmpId);
-
-                    result = tmpId;
-                }
-                break;
+        catch (JsonProcessingException exc) {
+          LOGGER.error(exc);
         }
-
-        return new APIGatewayProxyResponseEvent().withBody(result).withStatusCode(200);
+        break;
+      case "DELETE":
+        if (pathParameters != null) {
+          String id = pathParameters.get("userId");
+          String tmpId = userService.delete(id);
+          LOGGER.info("DELETE: " + tmpId);
+          result = tmpId;
+        }
+        break;
     }
 
-    private String createUserId() {
-        return UUID.randomUUID().toString();
-    }
+    return new APIGatewayProxyResponseEvent().withBody(result).withStatusCode(200);
+  }
+
+  private String createUserId() {
+    return UUID.randomUUID().toString();
+  }
 }
